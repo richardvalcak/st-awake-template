@@ -2,40 +2,70 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from streamlit_app import STREAMLIT_APPS
+from selenium.common.exceptions import TimeoutException, WebDriverException
 import datetime
+import time
 
-# Set up Selenium webdriver
+# Tvoje appky – sem je dej
+STREAMLIT_APPS = [
+    "https://ubytovani.streamlit.app",
+    "https://kniha-tyrsova-znojmo.streamlit.app"
+]
+
+# Nastavení Chrome pro GitHub Actions (2026 realita)
 options = webdriver.ChromeOptions()
-options.add_argument('--headless')
-driver = webdriver.Chrome(options=options)
+options.add_argument('--headless=new')
+options.add_argument('--no-sandbox')
+options.add_argument('--disable-dev-shm-usage')
+options.add_argument('--disable-gpu')
+options.add_argument('--window-size=1920,1080')
+options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36')
 
-# Initialize log file
-with open("wakeup_log.txt", "a") as log_file:
-    log_file.write(f"Execution started at: {datetime.datetime.now()}\n")
-
-    # Iterate through each URL in the list
-    for url in STREAMLIT_APPS:
-        try:
-            # Navigate to the webpage
-            driver.get(url)
-            
-            # Wait for the page to load
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-
-            # Check if the wake up button exists
-            try:
-                button = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, "//button[text()='Yes, get this app back up!']"))
-                )
-                button.click()
-                log_file.write(f"[{datetime.datetime.now()}] Successfully woke up app at: {url}\n")
-            except TimeoutException:
-                log_file.write(f"[{datetime.datetime.now()}] Button not found for app at: {url}\n")
+def wake_app(url):
+    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}] Zkouším: {url}")
+    
+    driver = None
+    try:
+        driver = webdriver.Chrome(options=options)
+        driver.set_page_load_timeout(60)
         
-        except Exception as e:
-            log_file.write(f"[{datetime.datetime.now()}] Error for app at {url}: {str(e)}\n")
+        driver.get(url)
+        
+        # Počkáme na načtení stránky
+        WebDriverWait(driver, 25).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        
+        # Hledáme tlačítko probuzení (text se v 2026 nemění často)
+        xpath = "//button[contains(., 'Yes, get this app back up') or contains(., 'get this app back up') or contains(., 'wake it back up')]"
+        
+        try:
+            button = WebDriverWait(driver, 15).until(
+                EC.element_to_be_clickable((By.XPATH, xpath))
+            )
+            button.click()
+            print(f"   → Kliknuto na probuzení!")
+            time.sleep(10)          # počkáme na start appky
+            print(f"   → Hotovo (pravděpodobně probuzeno)")
+            
+        except TimeoutException:
+            print("   → Tlačítko nenalezeno → app už běží")
+            
+    except WebDriverException as e:
+        print(f"   → Problém s prohlížečem: {str(e)}")
+    except Exception as e:
+        print(f"   → Jiná chyba: {str(e)}")
+        
+    finally:
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass
 
-# Close the browser
-driver.quit()
+if __name__ == "__main__":
+    print("=== Start keep-alive job ===")
+    for url in STREAMLIT_APPS:
+        wake_app(url)
+        time.sleep(5)           # malá pauza mezi appkami
+    print("=== Job dokončen ===")
