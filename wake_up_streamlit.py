@@ -4,7 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 import datetime
-import time
+import time 
 
 # Tvoje appky – sem je dej
 STREAMLIT_APPS = [
